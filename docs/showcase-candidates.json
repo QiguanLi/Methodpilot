@@ -1,0 +1,241 @@
+{
+  "papers": [
+    {
+      "paper_id": "P001",
+      "label": "ReAct",
+      "file": "/tmp/pdfs/2210.03629.pdf",
+      "page_count": 33,
+      "sentences": 687,
+      "method_candidates": [
+        {
+          "page": 1,
+          "quote": "We apply our approach, named ReAct, to a diverse set of language and decision making tasks and demonstrate its effectiveness over state-of-the-art baselines in addition to improved human interpretability and trustworthiness."
+        },
+        {
+          "page": 2,
+          "quote": "In this work, we present ReAct, a general paradigm to combine reasoning and acting with language models for solving diverse language reasoning and decision making tasks (Figure 1)."
+        },
+        {
+          "page": 3,
+          "quote": "The idea of ReAct is simple: we augment the agent’s action space to ˆ A = A ∪L, where L is the space of language."
+        },
+        {
+          "page": 9,
+          "quote": "Despite the simplicity of our method, complex tasks with large action spaces require more demonstrations to learn well, which unfortunately can easily go beyond the input length limit of in-context learning."
+        },
+        {
+          "page": 16,
+          "quote": "Answer 1,800 to 7,000 ft Question Musician and satirist Allie Goertz wrote a song about the \"The Simpsons\" character Milhouse, who Matt Groening named after who?"
+        },
+        {
+          "page": 16,
+          "quote": "Action 2 Lookup[eastern sector] Observation 2 (Result 1 / 1) The eastern sector extends into the High Plains and is called the Central Plains orogeny."
+        }
+      ],
+      "causal_candidates": [],
+      "limitation_candidates": []
+    },
+    {
+      "paper_id": "P002",
+      "label": "AutoGen",
+      "file": "/tmp/pdfs/2308.08155.pdf",
+      "page_count": 43,
+      "sentences": 1013,
+      "method_candidates": [
+        {
+          "page": 2,
+          "quote": "Achieving this requires addressing two critical questions: (1) How can we design individual agents that are capable, reusable, customizable, and effective in multi-agent collaboration?"
+        },
+        {
+          "page": 2,
+          "quote": "(2) How can we develop a straightforward, unified interface that can accommodate a wide range of agent conversation patterns?"
+        },
+        {
+          "page": 2,
+          "quote": "While there is contemporaneous exploration of multi-agent approaches,3 we present AutoGen, a generalized multi-agent conversation framework (Figure 1), based on the following new concepts."
+        },
+        {
+          "page": 5,
+          "quote": "By messaging additional agents in the called functions, the LLM can drive dynamic multi-agent conversation."
+        },
+        {
+          "page": 6,
+          "quote": "We evaluate our system and several alternative approaches, including open-source methods such as Multi-Agent Debate (Liang et al., 2023), LangChain ReAct (LangChain, 2023), vanilla GPT-4, and commercial products ChatGPT + Code Interpreter, and ChatGPT + Plugin (Wolfram Alpha), on the MATH (Hendrycks et al., 2021) dataset and summarize the results in Figure 4a."
+        },
+        {
+          "page": 6,
+          "quote": "In this section, we employ AutoGen to build a Retrieval-Augmented Generation (RAG) system (Lewis et al., 2020; Parvez et al., 2021) named Retrieval-augmented Chat."
+        }
+      ],
+      "causal_candidates": [
+        {
+          "page": 14,
+          "quote": "There are various types of agents in LangChain Agents, with the ReAct agent being a notable example that combines reasoning and acting when using LLMs (mainly designed for LLMs prior to ChatGPT) (Yao et al., 2022).",
+          "names": [
+            "ReAct",
+            "LangChain",
+            "ChatGPT"
+          ]
+        },
+        {
+          "page": 24,
+          "quote": "ReAct (Yao et al., 2022) is a few-shot prompting technique that interleaves reasoning and acting, allowing for greater synergy between the two and significantly improving performance on both language and decision-making tasks.",
+          "names": [
+            "ReAct"
+          ]
+        },
+        {
+          "page": 25,
+          "quote": "design matches the performance of ReAct, while the three-agent design significantly outperforms ReAct.",
+          "names": [
+            "ReAct"
+          ]
+        }
+      ],
+      "limitation_candidates": [
+        {
+          "page": 6,
+          "quote": "A2: Retrieval-Augmented Code Generation and Question Answering Retrieval augmentation has emerged as a practical and effective approach for mitigating the intrinsic limitations of LLMs by incorporating external documents."
+        },
+        {
+          "page": 6,
+          "quote": "The Retrieval-augmented User Proxy includes a vector database (Chroma, 5We did not evaluate ChatGPT on the whole dataset since it requires substantial manual effort and is restricted by its hourly message-number limitation."
+        },
+        {
+          "page": 9,
+          "quote": "Despite the complexity of these applications (most involving more than two agents or dynamic multi-turn agent cooperation), the implementation based on AutoGen remains straightforward."
+        },
+        {
+          "page": 10,
+          "quote": "Clear communication and user education about the capabilities and limitations of the system will be essential (Cai et al., 2019)."
+        },
+        {
+          "page": 14,
+          "quote": "A significant summary of its limitations can be found in (Woolf, 2023)."
+        },
+        {
+          "page": 14,
+          "quote": "Due to these limitations, even the multi-agent systems in LangChain (e.g., re-implementation of CAMEL) are not based on LangChain Agents but are implemented from scratch."
+        },
+        {
+          "page": 15,
+          "quote": "Under the ‘static’ pattern, agent topology remains unchanged regardless of different inputs."
+        },
+        {
+          "page": 16,
+          "quote": "Despite the complexity of these applications (most of them involve more than two agents or dynamic multi-turn agent cooperation), our AutoGen-based implementation remains simple, demonstrating promising opportunities to build creative applications and a large space for innovation."
+        },
+        {
+          "page": 27,
+          "quote": "Additionally, role-playing ensures that each agent’s memory remains isolated, preventing shortcuts and hallucinations 27"
+        }
+      ]
+    },
+    {
+      "paper_id": "P003",
+      "label": "SWE-agent",
+      "file": "/tmp/pdfs/2405.15793.pdf",
+      "page_count": 118,
+      "sentences": 873,
+      "method_candidates": [
+        {
+          "page": 1,
+          "quote": "As a result of this exploration, we introduce SWE-agent: a system that facilitates LM agents to autonomously use computers to solve software engineering tasks."
+        },
+        {
+          "page": 2,
+          "quote": "From this effort, we introduce SWE-agent, an agent composed of an LM and ACI, that can interact with a computer to solve challenging real-world software engineering problems, such as those proposed in SWE-bench [20]."
+        },
+        {
+          "page": 2,
+          "quote": "First, we introduce the concept of the agent-computer interface (ACI) and demonstrate how careful ACI design can substantially improve LM agent performance without modifying the underlying LM’s weights."
+        },
+        {
+          "page": 2,
+          "quote": "Unlike prior works that independently explore the merits of tool use, prompting techniques, and code execution in interactive settings, our approach unifies these factors within the ACI framework."
+        },
+        {
+          "page": 3,
+          "quote": "This is a defining principle for all SWE-agent commands that we describe in Section 3."
+        },
+        {
+          "page": 3,
+          "quote": "3 SWE-agent: Designing an ACI for Software Engineering Here we describe how SWE-agent provides an ACI for LMs to act as software engineering agents, enabling them to effectively search, navigate, edit, and execute code commands."
+        }
+      ],
+      "causal_candidates": [
+        {
+          "page": 2,
+          "quote": "Using GPT-4 Turbo as a base LM, SWE-agent solves 12.47% of the 2,294 SWE-bench test tasks, substantially outperforming the previous best resolve rate of 3.8% by a non-interactive, retrievalaugmented system [20].",
+          "names": [
+            "SWE-agent"
+          ]
+        },
+        {
+          "page": 5,
+          "quote": "As shown in Table 1, compared to RAG on Lite, SWE-agent is 8-13x more costly but yields a 6.7-fold improved % Resolved rate.",
+          "names": [
+            "SWE-agent"
+          ]
+        },
+        {
+          "page": 25,
+          "quote": "B Extended Results In this section, we provide additional results, including performance marginalized against different dimensions, patch generation statistics, and problem solving patterns reflected by SWE-agent trajectories.",
+          "names": [
+            "SWE-agent"
+          ]
+        },
+        {
+          "page": 25,
+          "quote": "Per analysis, we provide numerical or qualitative evidence that supports our findings, describe our takeaways from each finding, and discuss both the strengths of SWE-agent relative to prior baselines along with future directions based on improving common failure modes.",
+          "names": [
+            "SWE-agent"
+          ]
+        }
+      ],
+      "limitation_candidates": [
+        {
+          "page": 1,
+          "quote": "However, applying agents to more complex code tasks like software engineering remains unexplored."
+        },
+        {
+          "page": 2,
+          "quote": "Disparities in humans’ and LMs’ abilities and limitations motivates different interface design guidelines."
+        },
+        {
+          "page": 3,
+          "quote": "This means that we shape the actions, their documentation, and environment feedback to complement an LM’s limitations and abilities."
+        },
+        {
+          "page": 9,
+          "quote": "Humans and LMs have different characteristics, training objectives, specialities, and limitations [12, 31], and the interaction design processes can be seen as systematic behavioral experimentation that could reveal more insights into these differences towards establishing a comparative understanding of human and artificial intelligence."
+        },
+        {
+          "page": 10,
+          "quote": "Understanding human intelligence through human limitations."
+        },
+        {
+          "page": 23,
+          "quote": "There are no limitations on the form of the underlying command code."
+        },
+        {
+          "page": 30,
+          "quote": "Effectively utilizing later turns to either remedy multiple prior errors or pivot to a different problem solving approach are all viable strategies given the 20+ turns that remain."
+        },
+        {
+          "page": 32,
+          "quote": "While the number of consecutive failed edit attempts resulting in a recovery remains steady (2.2), it increases significantly for unsuccessful recoveries (5.59)."
+        },
+        {
+          "page": 36,
+          "quote": "This trend is consistent with the RAG based solutions; issues that require multiple edits across a codebase remains challenging for agents."
+        }
+      ]
+    }
+  ],
+  "candidates": {
+    "methods": [],
+    "causal": [],
+    "limitation": []
+  }
+}

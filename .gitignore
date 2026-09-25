@@ -1,0 +1,59 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Python 编译产物（PDF 解析服务用到 Python）
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.pytest_cache/
+
+# 环境变量与密钥 —— 绝不入库
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+
+# 打包/输出物
+*.zip
+*.tar.gz
+build/
+out/
+
+# 运行时数据（用户真实跑出来的项目数据 + 落盘 PDF）
+# 这些随使用而变，不该进版本库；Demo 数据在 src/data/*.ts，那个要提交。
+data/store
+data/uploads
+data/e2e-store
+data/e2e-uploads
+
+# 测试/自检脚本跑出来的产物（截图、临时 fixture）
+# 用 `pnpm demo:reset` 或手动清空即可，不必进版本库。
+.shots
+data/shots
+data/fixtures
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,10 @@
+import { chromium } from 'playwright'
+const b = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox','--disable-dev-shm-usage'] })
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } })
+await p.goto('http://localhost:5173/project/proj-aicoding-agent/report', { waitUntil: 'networkidle' })
+await p.waitForTimeout(3000)
+await p.screenshot({ path: '/tmp/f_report2.png' })
+const text = await p.evaluate(() => document.body.innerText)
+console.log('报告页字符数:', text.length)
+console.log('包含章节:', ['一、','二、','三、','四、','五、','六、','七、'].filter(s => text.includes(s)).join(' '))
+await b.close()

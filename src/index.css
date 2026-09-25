@@ -1,0 +1,315 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* 品牌 AI 强调色：蓝紫 */
+  --color-brand-50: #f2f1ff;
+  --color-brand-100: #e8e6ff;
+  --color-brand-200: #d3cfff;
+  --color-brand-300: #b0a8ff;
+  --color-brand-400: #8b7bfb;
+  --color-brand-500: #6d5cf0;
+  --color-brand-600: #5b46e0;
+  --color-brand-700: #4c37c4;
+  --color-brand-800: #3f2fa0;
+  --color-brand-900: #352b7f;
+
+  /* 中性色（科研工作台浅色基调） */
+  --color-ink-50: #f8fafc;
+  --color-ink-100: #f1f5f9;
+  --color-ink-200: #e6ebf2;
+  --color-ink-300: #cfd8e3;
+  --color-ink-400: #94a3b8;
+  --color-ink-500: #64748b;
+  --color-ink-600: #475569;
+  --color-ink-700: #334155;
+  --color-ink-800: #1e293b;
+  --color-ink-900: #0f172a;
+
+  --color-surface: #ffffff;
+  --color-canvas: #f7f8fb;
+
+  --radius-card: 14px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.04);
+  --shadow-lift: 0 2px 4px rgba(15, 23, 42, 0.05), 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-ink-200);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink-800);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--color-brand-200);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-300);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-400);
+  }
+}
+
+@layer components {
+  .mp-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-ink-200);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .mp-card-hover {
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  }
+  .mp-card-hover:hover {
+    box-shadow: var(--shadow-lift);
+    border-color: var(--color-brand-200);
+    transform: translateY(-1px);
+  }
+
+  .mp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 9px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+  .mp-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .mp-btn-primary {
+    background: var(--color-brand-600);
+    color: #fff;
+  }
+  .mp-btn-primary:hover:not(:disabled) {
+    background: var(--color-brand-700);
+  }
+
+  .mp-btn-ghost {
+    background: #fff;
+    color: var(--color-ink-700);
+    border-color: var(--color-ink-200);
+  }
+  .mp-btn-ghost:hover:not(:disabled) {
+    border-color: var(--color-brand-300);
+    color: var(--color-brand-700);
+    background: var(--color-brand-50);
+  }
+
+  .mp-btn-soft {
+    background: var(--color-brand-50);
+    color: var(--color-brand-700);
+  }
+  .mp-btn-soft:hover:not(:disabled) {
+    background: var(--color-brand-100);
+  }
+
+  .mp-input {
+    width: 100%;
+    border-radius: 9px;
+    border: 1px solid var(--color-ink-200);
+    background: #fff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-ink-800);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .mp-input::placeholder {
+    color: var(--color-ink-400);
+  }
+  .mp-input:focus {
+    border-color: var(--color-brand-400);
+    box-shadow: 0 0 0 3px var(--color-brand-100);
+  }
+
+  .mp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .mp-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-ink-400);
+  }
+
+  .mp-scroll-thin {
+    scrollbar-width: thin;
+  }
+}
+
+/* ---------- 动画 ---------- */
+@keyframes mp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mp-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(109, 92, 240, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(109, 92, 240, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(109, 92, 240, 0);
+  }
+}
+
+@keyframes mp-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes mp-dash {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+
+@keyframes mp-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.mp-anim-fade-up {
+  animation: mp-fade-up 0.4s ease both;
+}
+
+.mp-anim-pulse {
+  animation: mp-pulse-ring 1.8s infinite;
+}
+
+.mp-anim-slide-right {
+  animation: mp-slide-in-right 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 移动端导航抽屉：从左侧滑入 */
+@keyframes mp-slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.mp-anim-slide-left {
+  animation: mp-slide-in-left 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mp-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-ink-100) 25%,
+    var(--color-ink-200) 37%,
+    var(--color-ink-100) 63%
+  );
+  background-size: 200% 100%;
+  animation: mp-shimmer 1.4s linear infinite;
+  border-radius: 6px;
+}
+
+.mp-flow-line {
+  stroke-dasharray: 5 4;
+  animation: mp-dash 22s linear infinite;
+}
+
+/* ---------- 打印 / 导出 PDF ---------- */
+@media print {
+  @page {
+    margin: 14mm;
+    size: A4;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* 隐藏所有交互外壳，只保留报告正文 */
+  aside,
+  header,
+  nav,
+  button,
+  .mp-no-print {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+  }
+
+  .mp-card {
+    box-shadow: none !important;
+    border-color: #e6ebf2 !important;
+    break-inside: avoid;
+  }
+
+  section {
+    break-inside: avoid;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+}
+
