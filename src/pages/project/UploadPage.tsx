@@ -7,6 +7,7 @@ import {
   IconAlert,
   IconCheck,
   IconClose,
+  IconPlus,
   IconRefresh,
   IconUpload,
   ModeBadge,
@@ -67,6 +68,85 @@ export function UploadPage() {
   const projectId = id ?? ''
   const navigate = useNavigate()
   const { push } = useToast()
+
+  /**
+   * 项目可用性门禁（修复：向不存在的项目上传 → PROJECT_NOT_FOUND）。
+   *
+   * ── 问题 ──
+   * 侧边栏「上传论文」的链接是 `/project/<当前URL里的id>/upload`。
+   * 当用户在看到的是**内置 Demo 项目**（proj-aicoding-agent）时，
+   * 这个 id 只存在于浏览器的 Mock 层，服务端**没有**它的记录。
+   * 于是上传一路发到 `/api/projects/proj-aicoding-agent/papers`，
+   * 被服务端以 404 `PROJECT_NOT_FOUND` 拒绝 —— 用户看到的正是这句话。
+   *
+   * ── 修复原则 ──
+   * 上传请求只能使用**服务端真实存在的项目 ID**；绝不把浏览器里的
+   * Mock 项目当成真实项目去上传。所以在放行上传前，先向服务端核实
+   * 这个 id 是不是真实项目；不是就明确拦下并给出创建入口，
+   * 而不是让用户点了半天才收到一个 404。
+   *
+   * 状态含义：
+   *   'checking' 正在核实（未确定前不放行，避免"检查中就能点"）
+   *   'ok'       服务端确认存在 → 正常上传
+   *   'missing'  服务端没有该项目 → 显示创建入口，禁止上传
+   *   'unknown'  核实失败（服务端不可达）→ 交由上方 serverError 处理
+   */
+  const [projectGate, setProjectGate] = useState<'checking' | 'ok' | 'missing' | 'unknown'>(
+    'checking',
+  )
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectGate('missing')
+      return
+    }
+    let alive = true
+    setProjectGate('checking')
+    api
+      .getProject(projectId)
+      .then(() => {
+        if (alive) setProjectGate('ok')
+      })
+      .catch((e: unknown) => {
+        if (!alive) return
+        // 404 才代表"项目不存在"；其余（网络层失败等）归为 unknown，
+        // 不能把"服务端没起来"误报成"项目不存在"。
+        if (e instanceof ApiCallError && e.status === 404) setProjectGate('missing')
+        else setProjectGate('unknown')
+      })
+    return () => {
+      alive = false
+    }
+  }, [projectId])
+
+  /**
+   * 在服务端创建一个真实项目，然后带着新 id 进入它的上传页。
+   * 复用现有的 `POST /api/projects`（与新建项目页同一条接口）。
+   */
+  const createRealProject = useCallback(async () => {
+    setCreating(true)
+    try {
+      const project = await api.createProject({
+        name: '我的论文研究项目',
+        domain: 'custom',
+      })
+      push({
+        title: '项目创建成功',
+        description: '现在可以上传 PDF，服务端会解析章节并抽取方法',
+        tone: 'success',
+      })
+      navigate(`/project/${project.id}/upload`)
+    } catch (e: unknown) {
+      push({
+        title: '创建项目失败',
+        description: `${e instanceof Error ? e.message : String(e)}。请确认分析服务已启动。`,
+        tone: 'error',
+      })
+    } finally {
+      setCreating(false)
+    }
+  }, [navigate, push])
 
   const [tasks, setTasks] = useState<FileTask[]>([])
   const [dragging, setDragging] = useState(false)
@@ -237,6 +317,33 @@ export function UploadPage() {
       />
 
       <div className="space-y-4">
+        {/* 项目门禁：不是服务端真实项目时，先拦下并给出创建入口 */}
+        {projectGate === 'missing' && (
+          <Card className="border-amber-200 bg-amber-50/60 p-4">
+            <div className="flex items-start gap-2.5">
+              <IconAlert className="mt-0.5 h-4 w-4 text-amber-600" />
+              <div className="text-sm">
+                <p className="font-semibold text-amber-900">
+                  当前项目不存在于服务端，无法上传
+                </p>
+                <p className="mt-1 text-amber-800">
+                  项目 <code className="rounded bg-white/70 px-1">{projectId || '(空)'}</code>{' '}
+                  是内置演示项目，只在浏览器里，服务端没有它的记录。真实上传必须用一个服务端真实存在的项目。
+                </p>
+                <button
+                  type="button"
+                  disabled={creating || Boolean(serverError)}
+                  onClick={() => void createRealProject()}
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-ink-200 disabled:text-ink-400"
+                >
+                  <IconPlus className="h-3.5 w-3.5" />
+                  {creating ? '正在创建…' : '创建真实项目并上传'}
+                </button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* AI 状态横幅：这一条决定了后面的流程能不能算 LIVE */}
         {serverError ? (
           <Card className="border-rose-200 bg-rose-50/60 p-4">
@@ -281,20 +388,25 @@ export function UploadPage() {
           <div
             onDragOver={(e) => {
               e.preventDefault()
-              setDragging(true)
+              if (projectGate === 'ok') setDragging(true)
             }}
             onDragLeave={() => setDragging(false)}
             onDrop={(e) => {
               e.preventDefault()
               setDragging(false)
-              addFiles(Array.from(e.dataTransfer.files))
+              // 项目未通过服务端核实前，不接受文件：避免"能选文件却注定 404"
+              if (projectGate === 'ok') addFiles(Array.from(e.dataTransfer.files))
             }}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => {
+              if (projectGate === 'ok') inputRef.current?.click()
+            }}
             className={[
-              'flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors',
-              dragging
-                ? 'border-brand-400 bg-brand-50/60'
-                : 'border-ink-200 bg-ink-50/40 hover:border-brand-300 hover:bg-brand-50/30',
+              'flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors',
+              projectGate !== 'ok'
+                ? 'cursor-not-allowed border-ink-200 bg-ink-50/60 opacity-60'
+                : dragging
+                  ? 'cursor-pointer border-brand-400 bg-brand-50/60'
+                  : 'cursor-pointer border-ink-200 bg-ink-50/40 hover:border-brand-300 hover:bg-brand-50/30',
             ].join(' ')}
           >
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-100 text-brand-600">
@@ -304,13 +416,18 @@ export function UploadPage() {
               把 PDF 拖到这里，或点击选择文件
             </p>
             <p className="mt-1 text-xs text-ink-500">
-              支持批量选择（最多 {MAX_FILES} 个），单文件不超过 {MAX_BYTES / 1048576}MB
+              {projectGate === 'checking'
+                ? '正在核实项目…'
+                : projectGate === 'ok'
+                  ? `支持批量选择（最多 ${MAX_FILES} 个），单文件不超过 ${MAX_BYTES / 1048576}MB`
+                  : '请先使用服务端真实存在的项目（见上方提示）'}
             </p>
             <input
               ref={inputRef}
               type="file"
               accept="application/pdf,.pdf"
               multiple
+              disabled={projectGate !== 'ok'}
               className="hidden"
               onChange={(e) => {
                 addFiles(Array.from(e.target.files ?? []))
@@ -342,7 +459,9 @@ export function UploadPage() {
               )}
               <button
                 type="button"
-                disabled={!queuedCount || running || Boolean(serverError)}
+                disabled={
+                  !queuedCount || running || Boolean(serverError) || projectGate !== 'ok'
+                }
                 onClick={() => void startAnalysis()}
                 className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-ink-200 disabled:text-ink-400"
               >
