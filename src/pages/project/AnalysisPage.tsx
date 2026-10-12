@@ -8,6 +8,7 @@ import {
   IconArrowRight,
   IconCheck,
   IconChevronDown,
+  IconLayers,
   IconQuote,
   IconRefresh,
   IconSparkles,
@@ -118,10 +119,20 @@ export function AnalysisPage() {
   )
   const [expanded, setExpanded] = useState<string | null>('S3')
   const [running, setRunning] = useState(false)
+  /** 仅展示态：长日志展开、原始记录折叠（不影响任何业务逻辑） */
+  const [expandedLog, setExpandedLog] = useState<number | null>(null)
+  const [showRaw, setShowRaw] = useState(false)
   const logSeq = useRef(100)
   const logBoxRef = useRef<HTMLDivElement>(null)
+  /** 首次渲染不自动滚动到底部，避免初始日志被推到视口外 */
+  const didMountRef = useRef(false)
 
   useEffect(() => {
+    // 仅展示行为调整：首次进入停在顶部，之后有新日志再跟随到底部
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
     logBoxRef.current?.scrollTo({ top: logBoxRef.current.scrollHeight, behavior: 'smooth' })
   }, [logs])
 
@@ -202,17 +213,30 @@ export function AnalysisPage() {
   const overallPct = Math.round((doneCount / stages.length) * 100)
   const nextIdx = stages.findIndex((s) => s.status !== 'done')
 
-  const levelColor: Record<string, string> = {
-    info: 'text-ink-500',
-    success: 'text-emerald-600',
-    warn: 'text-amber-600',
-    evidence: 'text-brand-600',
-  }
   const levelDot: Record<string, string> = {
     info: 'bg-ink-300',
     success: 'bg-emerald-400',
     warn: 'bg-amber-400',
     evidence: 'bg-brand-400',
+  }
+  /** 日志级别的浅色徽标（背景 + 前景），用于右侧「分析动态」 */
+  const levelBadge: Record<string, string> = {
+    info: 'bg-ink-100 text-ink-500',
+    success: 'bg-emerald-50 text-emerald-600',
+    warn: 'bg-amber-50 text-amber-600',
+    evidence: 'bg-brand-50 text-brand-600',
+  }
+  const levelLabel: Record<string, string> = {
+    info: '信息',
+    success: '完成',
+    warn: '提示',
+    evidence: '证据',
+  }
+  const levelIcon: Record<string, React.ReactNode> = {
+    info: <span className="h-1.5 w-1.5 rounded-full bg-ink-400" />,
+    success: <IconCheck className="h-3 w-3" />,
+    warn: <span className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-amber-500" />,
+    evidence: <IconQuote className="h-3 w-3" />,
   }
 
   return (
@@ -222,7 +246,7 @@ export function AnalysisPage() {
         subtitle="Agent 流水线 · 六个阶段依次产出方法、关系、空白与研究方向"
         meta={
           <>
-            <Chip tone={running ? 'warn' : doneCount === 6 ? 'success' : 'brand'}>
+            <Chip tone={running ? 'brand' : doneCount === 6 ? 'success' : 'neutral'}>
               {running ? '● 运行中' : doneCount === 6 ? '✓ 全部完成' : `${doneCount}/6 阶段完成`}
             </Chip>
             <Chip tone="neutral">共 18 篇论文入队</Chip>
@@ -253,15 +277,20 @@ export function AnalysisPage() {
 
       {/* 总进度 */}
       <Card className="p-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="text-[13px] font-semibold text-ink-800">流水线总进度</p>
-              <span className="font-mono text-[12px] font-semibold tabular-nums text-brand-600">
+            <div className="flex items-baseline gap-2">
+              <p className="text-[13.5px] font-semibold text-ink-800">分析总进度</p>
+              <span className="text-[11.5px] text-ink-400">
+                已完成 {doneCount}/6 阶段
+              </span>
+            </div>
+            <div className="mt-2.5 flex items-center gap-3">
+              <ProgressBar value={doneCount} max={6} className="flex-1" />
+              <span className="shrink-0 font-mono text-[13px] font-semibold tabular-nums text-brand-600">
                 {overallPct}%
               </span>
             </div>
-            <ProgressBar value={doneCount} max={6} className="mt-2" />
           </div>
           <div className="hidden shrink-0 gap-1.5 sm:flex">
             {stages.map((s) => (
@@ -270,10 +299,10 @@ export function AnalysisPage() {
                 title={`${s.index}. ${s.name}`}
                 className={clsx(
                   'h-6 w-6 rounded-md text-center text-[10px] font-semibold leading-6',
-                  s.status === 'done' && 'bg-emerald-100 text-emerald-700',
+                  s.status === 'done' && 'bg-emerald-50 text-emerald-600',
                   s.status === 'running' && 'mp-anim-pulse bg-brand-100 text-brand-700',
                   s.status === 'waiting' && 'bg-ink-100 text-ink-400',
-                  s.status === 'failed' && 'bg-rose-100 text-rose-700',
+                  s.status === 'failed' && 'bg-rose-50 text-rose-600',
                 )}
               >
                 {s.status === 'done' ? '✓' : s.index}
@@ -283,14 +312,14 @@ export function AnalysisPage() {
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         {/* 左：阶段列表 */}
         <div className="space-y-2">
           {stages.map((s, i) => {
             const isOpen = expanded === s.id
-            const statusMeta: Record<StageStatus, { chip: 'success' | 'warn' | 'neutral' | 'danger'; icon: React.ReactNode; label: string }> = {
+            const statusMeta: Record<StageStatus, { chip: 'success' | 'brand' | 'neutral' | 'danger'; icon: React.ReactNode; label: string }> = {
               done: { chip: 'success', icon: <IconCheck className="h-3 w-3" />, label: '完成' },
-              running: { chip: 'warn', icon: <span className="h-1.5 w-1.5 animate-ping rounded-full bg-amber-500" />, label: '分析中' },
+              running: { chip: 'brand', icon: <span className="h-1.5 w-1.5 animate-ping rounded-full bg-brand-500" />, label: '分析中' },
               waiting: { chip: 'neutral', icon: <span className="h-1.5 w-1.5 rounded-full bg-ink-300" />, label: '等待' },
               failed: { chip: 'danger', icon: <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />, label: '失败' },
             }
@@ -366,7 +395,7 @@ export function AnalysisPage() {
                 </button>
 
                 {isOpen && (
-                  <div className="border-t border-ink-200 bg-ink-50/50 px-4 py-3">
+                  <div className="border-t border-ink-200 bg-ink-50 px-4 py-3">
                     <p className="text-[12px] leading-relaxed text-ink-600">{s.description}</p>
 
                     {/* 阶段专属日志 */}
@@ -450,63 +479,102 @@ export function AnalysisPage() {
           })}
         </div>
 
-        {/* 右：AI 日志 */}
-        <Card className="flex h-[640px] flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-ink-200 bg-ink-900 px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <span className="flex gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
+        {/* 右：分析动态 */}
+        <Card className="flex min-h-[420px] flex-col overflow-hidden xl:h-[640px]">
+          <div className="flex items-center justify-between border-b border-ink-200 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                <IconLayers className="h-3.5 w-3.5" />
               </span>
-              <p className="ml-1 font-mono text-[11.5px] font-medium text-ink-100">
-                AI Analysis Log
-              </p>
+              <div className="min-w-0">
+                <p className="text-[13.5px] font-semibold text-ink-800">分析动态</p>
+                <p className="truncate text-[11px] text-ink-400">按时间顺序记录的分析过程</p>
+              </div>
             </div>
             {running && (
-              <span className="flex items-center gap-1.5 font-mono text-[10.5px] text-emerald-300">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                live
+              <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-brand-600">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
+                进行中
               </span>
             )}
           </div>
 
-          <div
-            ref={logBoxRef}
-            className="mp-scroll-thin flex-1 space-y-1.5 overflow-y-auto bg-ink-900 px-4 py-3"
-          >
-            {logs.map((l) => (
-              <div key={l.id} className="flex gap-2.5">
-                <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-ink-500">
-                  {l.time}
+          <div ref={logBoxRef} className="mp-scroll-thin flex-1 space-y-1 overflow-y-auto px-3 py-3">
+            {logs.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center px-6 py-10 text-center">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink-100 text-ink-400">
+                  <IconLayers className="h-5 w-5" />
                 </span>
-                <span
-                  className={clsx(
-                    'shrink-0 font-mono text-[10.5px]',
-                    levelColor[l.level],
-                  )}
-                >
-                  {l.level === 'evidence' ? '◆' : l.level === 'success' ? '✓' : l.level === 'warn' ? '!' : '·'}
-                </span>
-                {l.ref?.type === 'evidence' ? (
-                  <button
-                    onClick={() => openEvidence(l.ref!.id)}
-                    className="text-left font-mono text-[11px] leading-relaxed text-ink-200 underline decoration-dotted transition hover:text-brand-300"
-                  >
-                    {l.message}
-                  </button>
-                ) : (
-                  <span className="font-mono text-[11px] leading-relaxed text-ink-300">
-                    {l.message}
-                  </span>
-                )}
+                <p className="mt-3 text-[13px] font-medium text-ink-600">暂无分析动态</p>
+                <p className="mt-1 text-[11.5px] leading-relaxed text-ink-400">
+                  点击上方「执行」按钮开始分析，过程中的记录会实时出现在这里。
+                </p>
               </div>
-            ))}
+            ) : (
+              logs.map((l) => {
+                const isLong = l.message.length > 46
+                const isExpanded = expandedLog === l.id
+                const msgClass = clsx(
+                  'text-[12px] leading-relaxed',
+                  isLong && !isExpanded && 'line-clamp-2',
+                )
+                return (
+                  <div
+                    key={l.id}
+                    className="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-ink-50"
+                  >
+                    <span
+                      className={clsx(
+                        'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
+                        levelBadge[l.level],
+                      )}
+                      title={levelLabel[l.level]}
+                    >
+                      {levelIcon[l.level]}
+                    </span>
+                    <span className="mt-0.5 shrink-0 font-mono text-[10.5px] tabular-nums text-ink-400">
+                      {l.time}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {l.ref?.type === 'evidence' ? (
+                        <button
+                          onClick={() => openEvidence(l.ref!.id)}
+                          className={clsx(
+                            'text-left text-brand-700 underline decoration-brand-300 decoration-dotted underline-offset-2 transition hover:text-brand-800',
+                            msgClass,
+                          )}
+                        >
+                          {l.message}
+                        </button>
+                      ) : (
+                        <span
+                          className={clsx(
+                            'text-ink-600',
+                            msgClass,
+                            isLong && 'cursor-pointer',
+                          )}
+                          onClick={isLong ? () => setExpandedLog(isExpanded ? null : l.id) : undefined}
+                        >
+                          {l.message}
+                        </span>
+                      )}
+                      {isLong && (
+                        <button
+                          onClick={() => setExpandedLog(isExpanded ? null : l.id)}
+                          className="mt-0.5 block text-[10.5px] text-ink-400 transition hover:text-brand-600"
+                        >
+                          {isExpanded ? '收起' : '展开'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
 
-            {running && (
-              <div className="flex gap-2.5 pt-1">
-                <span className="shrink-0 font-mono text-[10.5px] text-ink-500">····</span>
-                <span className="flex items-center gap-1.5 font-mono text-[11px] text-brand-300">
+            {running && logs.length > 0 && (
+              <div className="flex items-center gap-2.5 px-2 py-1.5">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                   <span className="flex gap-0.5">
                     {[0, 1, 2].map((i) => (
                       <span
@@ -516,14 +584,14 @@ export function AnalysisPage() {
                       />
                     ))}
                   </span>
-                  Agent 正在推理…
                 </span>
+                <span className="text-[11.5px] text-brand-600">正在处理…</span>
               </div>
             )}
           </div>
 
           {/* 底部统计 */}
-          <div className="grid grid-cols-3 divide-x divide-ink-200 border-t border-ink-200 bg-white">
+          <div className="grid grid-cols-3 divide-x divide-ink-200 border-t border-ink-200">
             {[
               { label: '日志条数', value: logs.length },
               { label: '证据建立', value: logs.filter((l) => l.level === 'evidence').length },
@@ -536,6 +604,29 @@ export function AnalysisPage() {
                 <p className="mt-0.5 text-[10.5px] text-ink-400">{x.label}</p>
               </div>
             ))}
+          </div>
+
+          {/* 原始记录（只读折叠，保留演示属性） */}
+          <div className="border-t border-ink-200">
+            <button
+              onClick={() => setShowRaw((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-2 text-[11.5px] text-ink-500 transition hover:bg-ink-50"
+            >
+              <span>查看原始记录</span>
+              <IconChevronDown
+                className={clsx('h-3.5 w-3.5 text-ink-400 transition-transform', showRaw && 'rotate-180')}
+              />
+            </button>
+            {showRaw && (
+              <div className="border-t border-ink-100 bg-ink-50 px-4 py-3">
+                <pre className="mp-scroll-thin max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[10.5px] leading-relaxed text-ink-500">
+                  {logs.map((l) => `${l.time}  [${l.level}]  ${l.message}`).join('\n')}
+                </pre>
+                <p className="mt-2 text-[10.5px] text-ink-400">
+                  以上为当前页面加载的演示日志（Mock 数据），非实时模型调用记录。
+                </p>
+              </div>
+            )}
           </div>
         </Card>
       </div>
