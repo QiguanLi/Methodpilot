@@ -17,7 +17,6 @@ import {
   IconPlus,
   IconReport,
   IconSearch,
-  IconSettings,
   IconSparkles,
   IconTarget,
   IconTimeline,
@@ -165,19 +164,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               </li>
             )
           })}
-        </ul>
-
-        <div className="my-3 border-t border-ink-200" />
-
-        <ul className="space-y-0.5">
-          <li>
-            <button className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-ink-600 transition-colors hover:bg-ink-50 hover:text-ink-800">
-              <span className="text-ink-400 group-hover:text-ink-500">
-                <IconSettings />
-              </span>
-              <span className="flex-1 text-left">项目设置</span>
-            </button>
-          </li>
         </ul>
       </nav>
 
