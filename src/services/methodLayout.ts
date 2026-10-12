@@ -20,6 +20,35 @@ export const NODE_W = 196
 export const NODE_H = 54
 
 /**
+ * 单列最多容纳多少个方法节点，超出则**同一家族在水平方向拆成多个子列**。
+ *
+ * 为什么需要它：
+ *   原布局里"一列 = 一个方法族"。真实上传项目最常见的形态是**只有一个
+ *   未分类族**，于是 7、8 个方法全部竖着堆在同一条窄列里——画布宽 1174，
+ *   节点却只占到 x≈230，右侧 80% 是纯空白；节点还常常超出可视高度。
+ *   这既浪费主视觉，也让"方法地图"看起来像坏掉的列表。
+ *
+ * 取 6 的理由：
+ *   6 × ROW_H(78) ≈ 468px，加上列标题与上下留白，正好落在常见的桌面
+ *   可视高度内，不需要内部纵向滚动即可看全一列。超过就换到下一子列，
+ *   横向铺开而不是无限向下延伸。
+ *
+ * 向后兼容：**任何族的方法数都不超过 MAX_ROWS 时，布局结果与旧版逐字段
+ * 一致**（col 就等于族索引），因此既有的分组语义与自测断言不受影响。
+ */
+export const MAX_ROWS = 6
+
+/**
+ * 单列"理想"行数。列预算有多余时，会把列继续分给单列行数仍高于此值的族，
+ * 让内容横向铺开、填满可用宽度；降到该值以下就停止分配，避免把少量方法
+ * 摊成稀疏的一点一点。
+ *
+ * 取 4：[4 行] 是既"看起来是列表/矩阵"又不显空的分界；配合 ROW_H(78)
+ * 约 312px 的主体高度，放在桌面卡片里紧凑好看。
+ */
+export const TARGET_ROWS = 4
+
+/**
  * 真实上传项目的「伪方法族」—— 未分类。
  *
  * 它的 id 必须是**空字符串**，与未分类真实方法的 family_id 严格对齐，
@@ -126,8 +155,23 @@ export interface Positioned {
   method: Method
   x: number
   y: number
+  /**
+   * 全局**视觉列号**（不是族索引）。多数情况下两者相等；
+   * 只有当某个族的方法数超过 MAX_ROWS、被拆成多个子列时，
+   * 后续族才会整体右移，于是 col ≠ 族索引。
+   * 关系线用它判"是否同列"来决定绕行方式，所以这里必须是视觉列。
+   */
   col: number
   row: number
+}
+
+/** 一个方法族在画布上占据的列区间，供列标题横跨渲染。 */
+export interface FamilyBand {
+  family_id: string
+  /** 起始视觉列号 */
+  startCol: number
+  /** 占用的视觉列数（≥1） */
+  colCount: number
 }
 
 export interface LayoutResult {
@@ -136,6 +180,8 @@ export interface LayoutResult {
   height: number
   /** 有多少个方法没被任何族接住 —— 正常应为 0，非 0 说明画布会有方法消失 */
   orphanCount: number
+  /** 每个族实际占据的列区间（顺序与传入 families 一致，只含非空族） */
+  familyBands: FamilyBand[]
 }
 
 /**
@@ -158,20 +204,125 @@ export interface LayoutResult {
  *
  * 两者取并集之后，"家族声明包含它"和"它自报家门"这两条路径**都不会丢方法**，
  * orphanCount 才真正只在数据硬伤时才非 0。
+ *
+ * ── 关于单族方法过多时的水平拆列 ──
+ *
+ * 一个族的方法数超过 MAX_ROWS 时，把它拆成若干**子列**，
+ * 在族内按 row-major 填充（先填满第一子列的第 0..MAX_ROWS-1 行，再填第二子列）。
+ *
+ * ── 关于"填充可用宽度" ──
+ *
+ * 仅按 MAX_ROWS 拆列还不够：真实项目往往只有 1 个未分类族，7~8 个方法只需 2 列，
+ * 而画布容器（桌面约 1100+ px）能放下 4~5 列。若只拆 2 列，右侧照样空一大片。
+ * 所以引入 `opts.maxCols`（由调用方按容器实测宽度算出）：
+ *   - 先把每族按 MAX_ROWS 拆成"最小必要列数"；
+ *   - 若总列数 < maxCols 且存在族仍高于"可容纳行数"，就把多出来的列**继续分给
+ *     方法最多的族**（每次 +1 列，重算行数），直到用完 maxCols 或所有族都不再
+ *     超出行数上限——从而让节点在水平方向真正铺开、填满可用画布。
+ *
+ * 这样：
+ *   - 单族 / 少族场景横向铺开，不再"全部堆在最左侧 + 右侧大片空白"；
+ *   - 未传 maxCols（例如自测、或无容器信息）时退化为"按 MAX_ROWS 拆列"，
+ *     多族少量方法时与旧布局完全一致；
+ *   - `col` 升级为全局视觉列号，关系线的"同列绕行 / 跨列贝塞尔"判定依然成立
+ *     （同族不同子列 = 不同 col = 走跨列曲线，不会把线画穿节点）。
  */
-export function layout(methods: Method[], families: MethodFamily[]): LayoutResult {
+export interface LayoutOptions {
+  /**
+   * 画布允许的最大视觉列数（含所有族）。由调用方按容器实测宽度估算，
+   * 例如 `Math.floor((containerWidth - 2 * PAD_X) / COL_W)`。
+   * 省略时按 MAX_ROWS 自然拆列。
+   */
+  maxCols?: number
+}
+
+/**
+ * 规划每个族占用的视觉列数（纯函数，便于自测）。
+ *
+ * 输入每族的方法数，输出与之一一对应的列数数组（空族为 0）。
+ * 规则：
+ *   1. 每族先给"按 MAX_ROWS 的最小必要列数"；
+ *   2. 若给了 maxCols 且还有余量，把余量优先分给当前"单列行数最多"的族，
+ *      直到用尽余量、或该族单列行数已降到 TARGET_ROWS（继续摊会过散）；
+ *   3. 每族至少 1 列（非空族），保证标题与分组不塌陷。
+ *
+ * 为什么下限是 TARGET_ROWS 而不是 MAX_ROWS：
+ *   只按"不超 MAX_ROWS"来拆，9 个方法会停在 2 列（每列 5 行），
+ *   而桌面容器能放下 4~5 列——右边照样空一大片。让它在行数仍偏多
+ *   （> TARGET_ROWS）时继续横向铺开，才能真正填满可用宽度。
+ */
+export function planColCounts(
+  counts: number[],
+  maxCols?: number,
+): number[] {
+  const cols = counts.map((n) => (n === 0 ? 0 : Math.ceil(n / MAX_ROWS)))
+  if (!maxCols || maxCols <= 0) return cols
+
+  const used = cols.reduce((a, b) => a + b, 0)
+  let budget = maxCols - used
+
+  // 预算不足（容器比"最小必要列"还窄）时不强行压缩——宁可横向滚动，也不挤坏布局。
+  while (budget > 0) {
+    // 找到"当前单列行数最多"的非空族，给它加一列（收益最大）
+    let target = -1
+    let worstRows = 0
+    for (let i = 0; i < counts.length; i++) {
+      if (counts[i] === 0) continue
+      const rows = Math.ceil(counts[i] / cols[i])
+      // 行数仍高于目标行数时才继续加列；已足够扁就停，避免把少量方法摊得过散
+      if (rows > TARGET_ROWS && rows > worstRows) {
+        worstRows = rows
+        target = i
+      }
+    }
+    if (target === -1) break
+    cols[target] += 1
+    budget -= 1
+  }
+  return cols
+}
+
+export function layout(
+  methods: Method[],
+  families: MethodFamily[],
+  opts: LayoutOptions = {},
+): LayoutResult {
   const positioned: Positioned[] = []
-  let maxRow = 0
+  const familyBands: FamilyBand[] = []
   const placed = new Set<string>()
 
-  families.forEach((family, col) => {
-    // 权威名单 + family_id 兜底，见上方注释
+  // 先为每个族算出它的成员，才能知道每族需要几个子列。
+  const groups = families.map((family) => {
     const members = new Set(family.method_ids)
     const famMethods = methods
       .filter((m) => members.has(m.method_id) || m.family_id === family.family_id)
       .sort((a, b) => a.year - b.year)
+    return { family, famMethods }
+  })
 
-    famMethods.forEach((m, row) => {
+  // 每个族占用的子列数：按 MAX_ROWS 拆列，再用容器余量继续铺开。
+  const colCounts = planColCounts(
+    groups.map((g) => g.famMethods.length),
+    opts.maxCols,
+  )
+
+  let cursor = 0 // 下一个可用视觉列号
+  let maxRowInUse = 0
+
+  groups.forEach((g, gi) => {
+    const colCount = colCounts[gi]
+    if (colCount === 0) return // 空族不占列，也不画标题
+
+    familyBands.push({ family_id: g.family.family_id, startCol: cursor, colCount })
+
+    // 该族每个子列实际承载的行数（均分，尽量填满 colCount 列）
+    const rowsPerCol = Math.ceil(g.famMethods.length / colCount)
+
+    g.famMethods.forEach((m, idx) => {
+      // row-major：先填满一子列，再换下一子列
+      const subCol = Math.floor(idx / rowsPerCol)
+      const row = idx % rowsPerCol
+      const col = cursor + subCol
       positioned.push({
         method: m,
         x: PAD_X + col * COL_W,
@@ -180,15 +331,20 @@ export function layout(methods: Method[], families: MethodFamily[]): LayoutResul
         row,
       })
       placed.add(m.method_id)
-      maxRow = Math.max(maxRow, row)
+      maxRowInUse = Math.max(maxRowInUse, row)
     })
+
+    cursor += colCount
   })
 
+  const totalCols = cursor
   return {
     nodes: positioned,
-    width: PAD_X * 2 + families.length * COL_W,
-    height: PAD_Y * 2 + (maxRow + 1) * ROW_H,
+    // 空画布（无任何族占列）时至少保留一个最小画布宽度，避免 0 宽。
+    width: PAD_X * 2 + Math.max(totalCols, 1) * COL_W,
+    height: PAD_Y * 2 + (maxRowInUse + 1) * ROW_H,
     orphanCount: methods.filter((m) => !placed.has(m.method_id)).length,
+    familyBands,
   }
 }
 
@@ -384,6 +540,109 @@ export function selfTestLayout(): LayoutCheck[] {
       d1?.value === 2 && d0?.value === 1,
       `F1=${d1?.value}, 未分类=${d0?.value}, 总数=${ms.length}`,
     )
+  }
+
+  /* 12. 单族方法过多时，横向拆成多个子列（不再全部堆在最左） */
+  {
+    const n = MAX_ROWS + 3 // 超过单列上限 3 个，应当换列
+    const ms = Array.from({ length: n }, (_, i) => method(`M${String(i + 1).padStart(3, '0')}`, ''))
+    const fams = liveFamilies(ms, TAXONOMY)
+    const r = layout(ms, fams)
+
+    const cols = new Set(r.nodes.map((node) => node.col))
+    push(
+      '单族超过单列上限时横向换列（不全部堆在最左）',
+      cols.size === 2,
+      `方法数=${n}, 视觉列数=${cols.size}`,
+    )
+    push('单族换列后方法不丢失', r.nodes.length === n, `${r.nodes.length}/${n}`)
+    // 同族换列后，第二子列的 x 必须比第一子列更大（真正利用了横向空间）
+    const minX = Math.min(...r.nodes.map((node) => node.x))
+    const maxX = Math.max(...r.nodes.map((node) => node.x))
+    push('单族换列后画布横向被利用（x 有展开）', maxX - minX >= COL_W, `Δx=${maxX - minX}`)
+    push('对比：旧布局宽度不足以容纳展开后的 x', r.width >= PAD_X * 2 + 2 * COL_W)
+  }
+
+  /* 13. 每族都不超过上限时，布局与旧版一致（col == 族索引，向后兼容） */
+  {
+    const ms = [method('A', 'F1'), method('B', 'F1'), method('C', 'F2'), method('D', 'F3')]
+    const fams: MethodFamily[] = [
+      { family_id: 'F1', name: 'F1', name_zh: '族一', description: '', color: '#000', method_ids: ['A', 'B'] },
+      { family_id: 'F2', name: 'F2', name_zh: '族二', description: '', color: '#111', method_ids: ['C'] },
+      { family_id: 'F3', name: 'F3', name_zh: '族三', description: '', color: '#222', method_ids: ['D'] },
+    ]
+    const r = layout(ms, fams)
+    const colOf = (id: string) => r.nodes.find((n) => n.method.method_id === id)?.col
+    push(
+      '每族不超上限时 col 等于族索引（向后兼容）',
+      colOf('A') === 0 && colOf('B') === 0 && colOf('C') === 1 && colOf('D') === 2,
+      `A=${colOf('A')} B=${colOf('B')} C=${colOf('C')} D=${colOf('D')}`,
+    )
+    push(
+      'familyBands 覆盖全部非空族且列数正确',
+      r.familyBands.length === 3 && r.familyBands.every((b) => b.colCount === 1),
+      JSON.stringify(r.familyBands.map((b) => `${b.family_id}@${b.startCol}x${b.colCount}`)),
+    )
+  }
+
+  /* 14. 混合：一超限族 + 若干普通族，后续族的起始列必须整体右移 */
+  {
+    const big = Array.from({ length: MAX_ROWS + 2 }, (_, i) => method(`B${i}`, 'F1'))
+    const small = [method('S1', 'F2')]
+    const ms = [...big, ...small]
+    const fams: MethodFamily[] = [
+      { family_id: 'F1', name: 'F1', name_zh: '大族', description: '', color: '#000', method_ids: big.map((m) => m.method_id) },
+      { family_id: 'F2', name: 'F2', name_zh: '小族', description: '', color: '#111', method_ids: ['S1'] },
+    ]
+    const r = layout(ms, fams)
+    const f1 = r.familyBands.find((b) => b.family_id === 'F1')
+    const f2 = r.familyBands.find((b) => b.family_id === 'F2')
+    push(
+      '大族占多列时后一族起始列右移（不重叠）',
+      Boolean(f1 && f2) && f1!.startCol === 0 && f1!.colCount === 2 && f2!.startCol === 2,
+      `F1=${f1?.startCol}x${f1?.colCount} F2=${f2?.startCol}x${f2?.colCount}`,
+    )
+    // 大族第二子列与小族的 x 必须不同（无重叠）
+    const xs = new Set(r.nodes.map((n) => `${n.col}:${n.row}`))
+    push('大族换列后所有节点位置唯一（无重叠）', xs.size === r.nodes.length, `唯一位置 ${xs.size}/${r.nodes.length}`)
+  }
+
+  /* 15. planColCounts：无 maxCols 时，等于按 MAX_ROWS 自然拆列 */
+  {
+    push('planColCounts 无预算时 = ceil(n/MAX_ROWS)', JSON.stringify(planColCounts([7, 3, 0])) === JSON.stringify([2, 1, 0]), JSON.stringify(planColCounts([7, 3, 0])))
+    push('planColCounts 空族占 0 列', planColCounts([0])[0] === 0)
+  }
+
+  /* 16. planColCounts：给足预算时把余量分给"最挤"的族（填满可用宽度） */
+  {
+    const c = planColCounts([9], 4) // 单族 9 个方法，容器能放 4 列
+    push('单族有预算时继续铺开到接近 4 列', c[0] >= 2 && c[0] <= 4, `列数=${c[0]}`)
+    // 分完后单列行数必须 ≤ MAX_ROWS
+    push('铺开后单列行数不超过 MAX_ROWS', Math.ceil(9 / c[0]) <= MAX_ROWS, `每列行数=${Math.ceil(9 / c[0])}`)
+  }
+
+  /* 17. planColCounts：预算不足时不压缩（宁可横向滚动） */
+  {
+    const c = planColCounts([20], 2) // 20 个方法，容器只能放 2 列
+    push('预算不足时保留最小必要列数（不挤坏）', c[0] === Math.ceil(20 / MAX_ROWS), `列数=${c[0]}`)
+  }
+
+  /* 18. 端到端：单族 9 方法 + 足够预算 → 视觉列数 > 2，横向铺开 */
+  {
+    const ms = Array.from({ length: 9 }, (_, i) => method(`X${i}`, ''))
+    const r = layout(ms, [UNCLASSIFIED_FAMILY], { maxCols: 5 })
+    const cols = new Set(r.nodes.map((n) => n.col))
+    const minX = Math.min(...r.nodes.map((n) => n.x))
+    const maxX = Math.max(...r.nodes.map((n) => n.x))
+    push(
+      '单族 9 方法 + 预算 → 铺开到多列（消除右侧死区）',
+      cols.size >= 3 && maxX - minX >= 2 * COL_W,
+      `列数=${cols.size}, Δx=${maxX - minX}`,
+    )
+    push('铺开后仍无孤儿、无丢失', r.nodes.length === 9 && r.orphanCount === 0, `${r.nodes.length}/9`)
+    // 节点位置唯一
+    const pos = new Set(r.nodes.map((n) => `${n.col}:${n.row}`))
+    push('铺开后节点位置唯一（无重叠）', pos.size === r.nodes.length, `${pos.size}/${r.nodes.length}`)
   }
 
   return checks

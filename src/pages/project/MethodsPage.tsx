@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams, useParams, Link } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { PageHeader } from '@/components/AppLayout'
@@ -6,6 +6,7 @@ import {
   Card,
   Chip,
   EmptyState,
+  IconChevronRight,
   IconClose,
   IconLayers,
   IconPlus,
@@ -80,7 +81,13 @@ export function MethodsPage() {
   const [params, setParams] = useSearchParams()
   const { id: routeId } = useParams()
   const pid = routeId ?? DEMO_PROJECT_ID
-  const { selectedMethodId, setSelectedMethodId } = useAppState()
+  /*
+   * 只取 setter，不再读 selectedMethodId。
+   * 全局状态的默认值（'M001'）曾经导致首屏隐式聚焦，改由 URL 参数决定聚焦后，
+   * 这里保留 setter 只是为了不改变 selectMethod/clearFocus 对外的既有行为
+   * （AppContext 的消费方只有本页，去掉读取不影响其他组件）。
+   */
+  const { setSelectedMethodId } = useAppState()
   const { open: openEvidence } = useEvidenceDrawer()
 
   /**
@@ -158,7 +165,23 @@ export function MethodsPage() {
 
   const isLive = dataset?.source === 'live'
 
-  const focusId = params.get('focus') ?? selectedMethodId ?? (isLive ? '' : 'M001')
+  /*
+   * 聚焦方法的唯一真源是 URL 的 `focus` 参数。
+   *
+   * 这里**刻意不**回退到全局 `selectedMethodId`：
+   *   AppContext 把它的默认值设成了 `'M001'`，于是旧写法
+   *   `params.get('focus') ?? selectedMethodId ?? (isLive ? '' : 'M001')`
+   *   里的 `?? ''` 永远轮不到执行——首屏还没点任何东西，focusId 就已经是 'M001'，
+   *   结果是 ReAct 节点被当作"已选中"，其余节点全部淡化到 opacity 0.28，
+   *   整张图第一眼看上去像"半失效"。用户并没有做任何选择。
+   *
+   * 新规则：
+   *   - URL 没有 focus 参数        → 不聚焦（''）
+   *   - URL focus 为空字符串       → 明确表示不聚焦（''）
+   *   - URL focus 是当前项目的有效方法 → 聚焦它
+   *   - URL focus 属于别的项目/不存在 → 视为未聚焦（下面用 allMethods 校验，避免脏 id 误淡化）
+   */
+  const rawFocus = params.get('focus') ?? ''
   const familyParam = params.get('family') ?? 'all'
 
   const [paradigm, setParadigm] = useState('all')
@@ -168,6 +191,16 @@ export function MethodsPage() {
   const [hoveredRelation, setHoveredRelation] = useState<string | null>(null)
 
   /**
+   * 画布容器是否真的需要横向滚动。
+   * 用它来**只在必要时**显示"左右滑动"提示——不必要时不打扰。
+   * 用 ResizeObserver 监听容器尺寸 + 内容宽度，避免写死断点。
+   */
+  const graphBoxRef = useRef<HTMLDivElement>(null)
+  const [graphHasHScroll, setGraphHasHScroll] = useState(false)
+  /** 画布容器实测宽度（首帧为 0，拿到后驱动列预算重排） */
+  const [graphWidth, setGraphWidth] = useState(0)
+
+  /**
    * Live：按每个方法自己的 family_id（阶段③ 真实 LLM 分类结果）分列。
    * 判不出来的落进「未分类」列——那是判定结果，不是能力缺失。
    * Demo：直接用知识库里的方法族。
@@ -175,6 +208,21 @@ export function MethodsPage() {
   const allMethods = useMemo(
     () => (isLive ? (dataset?.methods ?? []) : getMethods()),
     [isLive, dataset],
+  )
+
+  /**
+   * 经过校验的聚焦 id：只有命中当前项目方法集合时才生效。
+   *
+   * 这一步专门挡两种脏输入：
+   *   - 跨项目 URL（比如从 A 项目复制来的 `?focus=M003`，在 B 项目里不存在）；
+   *   - 全局默认值泄漏进来的旧 id。
+   * 若直接信任 URL，则"不存在的方法 id"会让所有真实节点都判定为"非焦点"而被淡化，
+   * 用户看到一张全灰的图——比不聚焦更糟。所以这里显式判空。
+   */
+  const focusId = useMemo(
+    () =>
+      rawFocus && allMethods.some((m) => m.method_id === rawFocus) ? rawFocus : '',
+    [rawFocus, allMethods],
   )
   /**
    * Demo：知识库里人工标注的演进关系（继承/改进/组合…）。
@@ -309,11 +357,37 @@ export function MethodsPage() {
     (r) => visibleIds.has(r.source_method) && visibleIds.has(r.target_method),
   )
 
-  const { nodes, width, height, orphanCount } = useMemo(
-    () => layout(visibleMethods, families),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visibleMethods.map((m) => m.method_id).join(','), isLive],
+  /*
+   * 实测容器宽度，换算成"最多能放几列"，交给 layout 把节点在水平方向铺开。
+   * 初始为 0（首帧未知）→ 退化为按 MAX_ROWS 自然拆列；拿到宽度后重排。
+   */
+  const maxCols = useMemo(
+    () => (graphWidth > 0 ? Math.max(1, Math.floor((graphWidth - PAD_X * 2) / COL_W)) : undefined),
+    [graphWidth],
   )
+
+  const { nodes, width, height, orphanCount, familyBands } = useMemo(
+    () => layout(visibleMethods, families, { maxCols }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleMethods.map((m) => m.method_id).join(','), isLive, maxCols],
+  )
+
+  /**
+   * 监听画布容器宽度 → 决定列预算与是否横向滚动。
+   * 依赖 `width`，所以换列 / 筛选导致画布变宽时都会重新判定。
+   */
+  useEffect(() => {
+    const el = graphBoxRef.current
+    if (!el) return
+    const update = () => {
+      setGraphWidth(el.clientWidth)
+      setGraphHasHScroll(el.scrollWidth - el.clientWidth > 4)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [width, visibleMethods.length])
 
   /**
    * 运行期兜底：如果有方法没被任何族接住，说明族 id 与方法 family_id 对不上。
@@ -712,12 +786,25 @@ export function MethodsPage() {
               />
             </div>
           ) : (
-            <div className="mp-scroll-thin overflow-auto overscroll-x-contain bg-[radial-gradient(circle_at_1px_1px,var(--color-ink-200)_1px,transparent_0)] [background-size:18px_18px]">
-              <svg
-                width={Math.max(width, 900)}
-                height={Math.max(height, 380)}
-                className="block"
+            <div className="relative">
+              <div
+                ref={graphBoxRef}
+                className="mp-scroll-thin overflow-auto overscroll-x-contain bg-[radial-gradient(circle_at_1px_1px,var(--color-ink-200)_1px,transparent_0)] [background-size:18px_18px]"
               >
+                {/*
+                 * 宽度策略：
+                 *   - layout 已按容器实测宽度决定列数，让节点铺开填满可用空间；
+                 *   - 画布用自然宽度（不再 minWidth:100% 强撑——强撑只会让节点
+                 *     靠左、右侧反而露出一条假空白）；窄于容器时用 mx-auto 居中，
+                 *     视觉上是"一张居中的图"，而非"一行左对齐的节点 + 右边空一片"；
+                 *   - 内容宽于容器时（多族 / 大量方法），画布保持自然宽度，
+                 *     容器横向滚动，节点不被压缩。
+                 */}
+                <svg
+                  width={width}
+                  height={Math.max(height, 380)}
+                  className="mx-auto block"
+                >
                 <defs>
                   {Object.entries(REL_COLOR).map(([type, color]) => (
                     <marker
@@ -755,23 +842,28 @@ export function MethodsPage() {
                   ))}
                 </defs>
 
-                {/* 列标题 */}
-                {families.map((f, i) => {
-                  const hasVisible = visibleMethods.some((m) => m.family_id === f.family_id)
-                  if (!hasVisible) return null
+                {/*
+                 * 列标题按 familyBands 渲染：族被水平拆成多个子列时，
+                 * 标题条要横跨该族的全部子列，否则会出现"标题只盖住第一列、
+                 * 第二列无主"的错觉。band 里已排除空族，无需再判 hasVisible。
+                 */}
+                {familyBands.map((band) => {
+                  const f = families.find((x) => x.family_id === band.family_id)
+                  if (!f) return null
+                  const bandW = band.colCount * COL_W - (COL_W - NODE_W) // 末列右留白对齐节点宽
                   return (
-                    <g key={f.family_id}>
+                    <g key={band.family_id}>
                       <rect
-                        x={PAD_X + i * COL_W - 6}
+                        x={PAD_X + band.startCol * COL_W - 6}
                         y={4}
-                        width={NODE_W + 12}
+                        width={bandW + 12}
                         height={16}
                         rx={4}
                         fill={f.color}
                         opacity={0.1}
                       />
                       <text
-                        x={PAD_X + i * COL_W + NODE_W / 2}
+                        x={PAD_X + band.startCol * COL_W + bandW / 2}
                         y={16}
                         textAnchor="middle"
                         className="fill-[var(--color-ink-500)] text-[9.5px] font-semibold"
@@ -949,6 +1041,21 @@ export function MethodsPage() {
                   )
                 })}
               </svg>
+              </div>
+              {/*
+               * 横向滑动提示：只在画布确实比容器宽（需要横向滚动）时出现，
+               * 窄屏上给用户一个"右边还有内容"的明确信号。
+               * 用渐变遮罩 + 一句话，不引入任何依赖。
+               */}
+              {graphHasHScroll && (
+                <>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white/95 to-transparent" />
+                  <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full border border-ink-200 bg-white/95 px-2 py-0.5 text-[10.5px] text-ink-500 shadow-sm">
+                    <IconChevronRight className="h-3 w-3" />
+                    左右滑动查看全部方法
+                  </div>
+                </>
+              )}
             </div>
           )}
 
