@@ -317,27 +317,26 @@ export function UploadPage() {
       />
 
       <div className="space-y-4">
-        {/* 项目门禁：不是服务端真实项目时，先拦下并给出创建入口 */}
+        {/* 项目门禁：演示项目/服务端不存在的项目 → 普通创建引导卡片（非警告） */}
         {projectGate === 'missing' && (
-          <Card className="border-amber-200 bg-amber-50/60 p-4">
-            <div className="flex items-start gap-2.5">
-              <IconAlert className="mt-0.5 h-4 w-4 text-amber-600" />
-              <div className="text-sm">
-                <p className="font-semibold text-amber-900">
-                  当前项目不存在于服务端，无法上传
-                </p>
-                <p className="mt-1 text-amber-800">
-                  项目 <code className="rounded bg-white/70 px-1">{projectId || '(空)'}</code>{' '}
-                  是内置演示项目，只在浏览器里，服务端没有它的记录。真实上传必须用一个服务端真实存在的项目。
+          <Card className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600">
+                <IconPlus className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="font-semibold text-ink-800">开始分析你的论文</p>
+                <p className="mt-1 text-ink-600">
+                  当前为示例项目。创建一个独立的研究项目后，即可上传 PDF 并开始分析。
                 </p>
                 <button
                   type="button"
                   disabled={creating || Boolean(serverError)}
                   onClick={() => void createRealProject()}
-                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-ink-200 disabled:text-ink-400"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-ink-200 disabled:text-ink-400"
                 >
-                  <IconPlus className="h-3.5 w-3.5" />
-                  {creating ? '正在创建…' : '创建真实项目并上传'}
+                  <IconPlus className="h-4 w-4" />
+                  {creating ? '正在创建…' : '创建项目并上传论文'}
                 </button>
               </div>
             </div>

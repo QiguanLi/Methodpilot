@@ -23,6 +23,15 @@ import { UploadPage } from '@/pages/project/UploadPage'
 const DEFAULT_PROJECT = 'proj-aicoding-agent'
 
 /**
+ * 「问 MethodPilot」悬浮球（本地问答助手）的显示开关。
+ *
+ * 复赛版本暂不接入外部大模型，且悬浮球会遮挡上传完成后的操作区域，
+ * 因此本轮**只在界面上隐藏**它。组件、服务与数据结构全部保留：
+ * 需要重新启用时，把这里改回 `true` 即可，无需改动任何其他代码。
+ */
+const SHOW_AI_ASSISTANT = false
+
+/**
  * 页面外壳。
  *
  * 在这里挂 `ProjectStatsProvider`：它需要当前项目 id 才能加载统计，
@@ -184,7 +193,8 @@ export default function App() {
           {/* 全局浮层：证据抽屉 / 通知 / AI 助手 */}
           <EvidenceDrawer />
           <ToastHost />
-          <AIAssistant />
+          {/* 悬浮问答助手：本轮暂时隐藏（保留实现，改 SHOW_AI_ASSISTANT 即可恢复） */}
+          {SHOW_AI_ASSISTANT && <AIAssistant />}
         </AppStateProvider>
       </EvidenceDrawerProvider>
     </ToastProvider>

@@ -11,14 +11,11 @@ import {
   IconQuote,
   IconRefresh,
   IconSparkles,
-  ModeBadge,
   ProgressBar,
   SectionTitle,
 } from '@/components/ui'
 import { useEvidenceDrawer, useToast } from '@/context/AppContext'
 import { analysisLogs } from '@/data/pipeline'
-import { api } from '@/services/api'
-import { stageTable } from '@/services/projectData'
 import {
   analyzePapers,
   buildEvolution,
@@ -253,15 +250,6 @@ export function AnalysisPage() {
           </>
         }
       />
-
-      {/**
-       * LIVE / MOCK 声明（第 24/40 节）。
-       *
-       * 这是本页最重要的一块内容：六个阶段里只有 ①文献解析 ②方法抽取 真正跑通，
-       * 其余四个仍是演示数据。不把这件事明说，评委就会以为整条流水线都是真的——
-       * 那比能力不足更糟。
-       */}
-      <LiveMockBanner />
 
       {/* 总进度 */}
       <Card className="p-4">
@@ -586,145 +574,5 @@ export function AnalysisPage() {
         </Card>
       </div>
     </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Live / Mock 声明                                                    */
-/* ------------------------------------------------------------------ */
-
-/**
- * 六个阶段的真实状态表。
- *
- * 数据来源是服务端 /api/health?deep=true —— 它真的跑了一次 PyMuPDF 自测
- * 和 Evidence Validator 自测，不是前端写死的字符串。
- * 服务端连不上时，全部降级显示为 MOCK，并且说明原因。
- */
-function LiveMockBanner() {
-  const [health, setHealth] = useState<
-    | null
-    | {
-        provider: string
-        model: string
-        aiReady: boolean
-        aiNote: string
-        parserOk: boolean
-        validatorOk: boolean
-        validatorFailures: string[]
-        promptVersion: string
-      }
-  >(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    api
-      .health(true)
-      .then((h) => {
-        if (!alive) return
-        setHealth({
-          provider: h.ai.provider,
-          model: h.ai.model,
-          aiReady: h.ai.ready,
-          aiNote: h.ai.reason,
-          parserOk: h.pdfParser.ok === true,
-          validatorOk: h.evidenceValidator.ok,
-          validatorFailures: h.evidenceValidator.failures,
-          promptVersion: h.promptVersion,
-        })
-      })
-      .catch((e: unknown) => {
-        if (!alive) return
-        setError(e instanceof Error ? e.message : String(e))
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const stages = health
-    ? stageTable({
-        source: 'live',
-        aiReady: health.aiReady,
-        aiProvider: health.provider,
-        aiNote: health.aiNote,
-      })
-    : []
-
-  const liveCount = stages.filter((s) => s.mode === 'LIVE').length
-
-  return (
-    <Card className="p-4">
-      <SectionTitle
-        title="能力实现状态"
-        subtitle="只有真正接了真实实现并通过回归测试的阶段才标记为 LIVE"
-        action={
-          health ? (
-            <Chip tone={liveCount >= 2 ? 'success' : 'warn'}>{liveCount}/6 阶段 LIVE</Chip>
-          ) : error ? (
-            <Chip tone="danger">服务端未连接</Chip>
-          ) : (
-            <Chip tone="neutral">检测中…</Chip>
-          )
-        }
-      />
-
-      {error ? (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          无法连接分析服务（{error}）。下方阶段状态无法确认，一律按 MOCK 处理。
-        </p>
-      ) : !health ? (
-        <p className="text-xs text-ink-400">正在检测服务端能力…</p>
-      ) : (
-        <>
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {stages.map((s) => (
-              <li
-                key={s.key}
-                className={[
-                  'rounded-lg border p-2.5',
-                  s.mode === 'LIVE' ? 'border-emerald-200 bg-emerald-50/40' : 'border-ink-100 bg-white',
-                ].join(' ')}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[12.5px] font-semibold text-ink-800">
-                    <span className="mr-1 text-ink-400">{String(s.index).padStart(2, '0')}</span>
-                    {s.title}
-                  </span>
-                  <ModeBadge mode={s.mode} note={s.note} />
-                </div>
-                <p className="mt-1 text-[11.5px] leading-relaxed text-ink-500">{s.desc}</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-ink-400">{s.note}</p>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-3 text-[11.5px]">
-            <Chip tone="neutral">Provider: {health.provider}</Chip>
-            <Chip tone="neutral">Model: {health.model}</Chip>
-            <Chip tone="neutral">Prompt: {health.promptVersion}</Chip>
-            <Chip tone={health.parserOk ? 'success' : 'danger'}>
-              PyMuPDF 自测 {health.parserOk ? '通过' : '未通过'}
-            </Chip>
-            <Chip tone={health.validatorOk ? 'success' : 'danger'}>
-              证据校验器自测 {health.validatorOk ? '通过' : '未通过'}
-            </Chip>
-          </div>
-
-          {!health.validatorOk && health.validatorFailures.length > 0 && (
-            <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-[11.5px] text-rose-700">
-              证据校验器自测失败：{health.validatorFailures.join('；')}。
-              <strong>校验器不可信时，任何"证据通过"的结论都不成立</strong>，请勿据此判断数据正确性。
-            </p>
-          )}
-
-          <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
-            说明：① 文献解析 与 ② 方法抽取 已接入真实实现，会在服务端读取 PDF、
-            调用模型并把每条证据逐字回验到具体页码；③–⑥ 仍为演示数据，
-            需要跨论文推理，本阶段未接入。真实上传流程请到「上传论文」页。
-          </p>
-        </>
-      )}
-    </Card>
   )
 }
